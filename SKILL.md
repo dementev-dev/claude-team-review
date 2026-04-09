@@ -30,19 +30,6 @@ Maximum 5 rounds.
 - `/claude-team-review <file-path>` — review a specific file (argument contains `/` or `.`)
 - `/claude-team-review xhigh` — use max effort for the reviewer
 
-## Prerequisites check
-
-Before proceeding, verify Agent Teams are available:
-1. Check that `CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS` is set to `1`.
-2. If not — tell the user:
-   ```
-   Agent Teams are not enabled. Add this to your settings.json or environment:
-   CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1
-   Then restart Claude Code.
-   ```
-
----
-
 ## Instructions
 
 ### Step 1: Determine review mode
@@ -77,6 +64,13 @@ Include in the spawn prompt a **briefing** with the review mode and
 enough context to start. The reviewer is a full Claude Code session —
 it will explore the repo, run git commands, and read files on its own.
 Do not pre-collect diffs or file lists for it.
+
+If spawning the teammate fails (Agent Teams not available), tell the user:
+```
+Agent Teams are not enabled. Add this to your settings.json or environment:
+CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1
+Then restart Claude Code.
+```
 
 **For plan review:**
 
@@ -241,6 +235,8 @@ Do NOT delete plan files that existed before the review.
 - Maximum 5 rounds to protect against infinite loops
 - Show the user reviews and fixes for each round
 - If Agent Teams are not enabled — tell the user how to enable them
+- Avoid creating auxiliary files (memory files, state files, logs, temporary
+  markdown) — prefer working within the conversation context
 - If a fix contradicts user requirements — skip and explain why
 - The reviewer teammate is stateful — use message, not re-spawn, for
   subsequent rounds. Re-spawning wastes tokens on re-reading the project
