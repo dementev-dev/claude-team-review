@@ -149,6 +149,17 @@ and inspecting related code before reporting.
 - [ ] Integration with CI (GitHub Actions)
 - [ ] Comparison benchmarks: Codex backend vs Team backend
 
+## Эксперимент: сравнение ревьюеров
+
+Мы запустили оба ревьюера (Opus и GPT-5.4) на одном и том же плане
+и сравнили находки. Ключевой вывод: модели ревьюят из принципиально
+разных парадигм — Opus как архитектор ("сработает ли этот дизайн?"),
+Codex как security/ops инженер ("что сломается в продакшене?").
+Ноль полных совпадений, ~30% частичных пересечений.
+
+Подробности: [EXPERIMENT.md](EXPERIMENT.md) — полный ход эксперимента,
+все находки, анализ пересечений, выводы.
+
 ## Related
 
 - [adversarial-review](https://github.com/dementev-dev/adversarial-review) —
