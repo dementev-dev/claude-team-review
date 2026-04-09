@@ -1,0 +1,161 @@
+# Claude Team Review
+
+Adversarial code and plan review using Claude Code Agent Teams.
+
+One teammate reviews. The lead fixes. Iterate until approved — with
+full context preserved between rounds.
+
+## What is this
+
+A [Claude Code skill](https://docs.anthropic.com/en/docs/claude-code) that
+spawns an adversarial reviewer as an Agent Teams teammate. The reviewer
+reads your project, runs tests, checks documentation, and delivers findings
+with a skeptical stance. The lead (your main session) fixes issues, then
+asks the same reviewer to re-check — no context loss, no re-reading the
+entire project.
+
+### How it differs from [adversarial-review](https://github.com/dementev-dev/adversarial-review)
+
+**adversarial-review** uses two different models (Claude writes, Codex
+reviews) — you get cross-model blind spot coverage and cheap re-review
+via `codex exec resume`. It requires Codex CLI and an OpenAI API key.
+
+**claude-team-review** stays within the Claude ecosystem. No external
+dependencies. The reviewer is a Claude Code teammate with its own context
+window, MCP access, and the ability to run commands. Context persists
+natively — the teammate simply receives the next message. The trade-off:
+same model family means no cross-model diversity.
+
+Use **adversarial-review** when you want maximum review quality through
+model diversity. Use **claude-team-review** when you want zero external
+dependencies and a richer reviewer (tests, docs, web search).
+
+## How it works
+
+```
+┌──────────┐     message      ┌────────────┐
+│   Lead   │ ───────────────> │  Reviewer   │
+│  (code)  │                  │ (teammate)  │
+└──────────┘                  └────────────┘
+     ^                              │
+     │          findings            │
+     │ <────────────────────────────┘
+     │
+     │  fix issues
+     v
+┌──────────┐     message      ┌────────────┐
+│   Lead   │ ───────────────> │  Reviewer   │
+│  (fixed) │  "re-check this" │ (same ctx)  │
+└──────────┘                  └────────────┘
+                                    │
+                              VERDICT: APPROVED
+```
+
+The reviewer teammate **keeps its context** across rounds. It already
+knows the project structure, the original findings, and the discussion
+history. Re-review is cheap.
+
+### Three modes
+
+| Mode           | What it reviews                    | When to use              |
+|----------------|------------------------------------|--------------------------|
+| `plan`         | Implementation plan                | Before writing code      |
+| `code`         | Git diff (unstaged, staged, branch)| After writing code       |
+| `code-vs-plan` | Code changes against the plan      | Verify implementation    |
+
+Mode is auto-detected from context, or you can force it with an argument.
+
+### What the reviewer can do
+
+- **Read** any file in the repository
+- **Run commands** — tests, linters, type checkers, build scripts
+- **Search the web** and **query documentation** via MCP (Context7)
+- **Inspect git history** — blame, log, diff
+
+The reviewer **cannot** create, edit, or delete project files.
+
+## Requirements
+
+- [Claude Code](https://docs.anthropic.com/en/docs/claude-code) ≥ 2.1.32
+- Agent Teams enabled (experimental)
+
+No external dependencies. No API keys beyond your Claude subscription.
+
+## Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/dementev-dev/claude-team-review.git
+
+# Symlink into Claude Code skills directory
+ln -s "$(pwd)/claude-team-review" ~/.agents/skills/claude-team-review
+```
+
+Enable Agent Teams in your Claude Code settings:
+
+```json
+{
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1"
+  }
+}
+```
+
+The skill also includes a subagent definition at
+`.claude/agents/adversarial-reviewer.md`. Copy it to your project's
+`.claude/agents/` or to `~/.claude/agents/` for global availability:
+
+```bash
+cp claude-team-review/.claude/agents/adversarial-reviewer.md ~/.claude/agents/
+```
+
+## Usage
+
+```bash
+# Auto-detect what to review
+/claude-team-review
+
+# Review a plan
+/claude-team-review plan
+
+# Review code changes
+/claude-team-review code
+
+# Review a specific file
+/claude-team-review path/to/plan.md
+
+# Use maximum reasoning effort for the reviewer
+/claude-team-review xhigh
+```
+
+## Reviewer behavior
+
+The reviewer uses an adversarial stance — it defaults to skepticism
+and tries to break confidence in the change. Each finding must answer:
+
+1. **What can go wrong?** — concrete scenario
+2. **Why vulnerable?** — cite specific location
+3. **Impact** — what breaks and how badly
+4. **Recommendation** — specific fix
+
+The reviewer verifies findings by running tests, checking documentation,
+and inspecting related code before reporting.
+
+## Roadmap
+
+- [ ] Real-world testing and iteration on prompts
+- [ ] Parallel multi-reviewer mode (security + performance + correctness)
+- [ ] Persistent reviewer memory across sessions
+- [ ] Integration with CI (GitHub Actions)
+- [ ] Comparison benchmarks: Codex backend vs Team backend
+
+## Related
+
+- [adversarial-review](https://github.com/dementev-dev/adversarial-review) —
+  cross-model variant using Codex CLI as the reviewer backend
+- [Claude Code Agent Teams docs](https://code.claude.com/docs/en/agent-teams) —
+  official documentation on Agent Teams
+
+## License
+
+Apache-2.0 — see [LICENSE](LICENSE).
