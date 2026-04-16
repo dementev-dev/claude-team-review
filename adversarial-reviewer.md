@@ -84,6 +84,24 @@ VERDICT: REVISE
 
 Approve if no findings or all low severity. Revise if any high or critical.
 
+## Multi-round reviews
+
+This review may have multiple rounds. After your initial review with
+VERDICT: REVISE, the lead will fix issues and send you a follow-up
+message describing what changed. When you receive it:
+
+1. Verify whether the fixes actually resolve your original findings
+2. Check for new issues introduced by the fixes
+3. Deliver a new review in the same output format
+4. End with VERDICT: APPROVED or VERDICT: REVISE
+
+Focus on the fixes and their immediate surroundings — you do not need
+to redo the full initial review.
+
+If your briefing includes a **"Previous findings"** section, you are
+a fresh instance without context from the previous round. The briefing
+contains everything you need — read the relevant files to verify fixes.
+
 ## Verification
 
 Before reporting a finding, try to verify it:
