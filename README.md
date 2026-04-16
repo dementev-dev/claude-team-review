@@ -2,17 +2,16 @@
 
 Adversarial code and plan review using Claude Code Agent Teams.
 
-One teammate reviews. The lead fixes. Iterate until approved — with
-full context preserved between rounds.
+One teammate reviews. The lead fixes. Iterate until approved.
 
 ## What is this
 
 A [Claude Code skill](https://docs.anthropic.com/en/docs/claude-code) that
 spawns an adversarial reviewer as an Agent Teams teammate. The reviewer
 reads your project, runs tests, checks documentation, and delivers findings
-with a skeptical stance. The lead (your main session) fixes issues, then
-asks the same reviewer to re-check — no context loss, no re-reading the
-entire project.
+with a skeptical stance. The lead (your main session) fixes issues and
+requests re-review from the same teammate. If the teammate is no longer
+active, the lead decides how to proceed — re-spawn or conclude.
 
 ### How it differs from [adversarial-review](https://github.com/dementev-dev/adversarial-review)
 
@@ -22,8 +21,9 @@ via `codex exec resume`. It requires Codex CLI and an OpenAI API key.
 
 **claude-team-review** stays within the Claude ecosystem. No external
 dependencies. The reviewer is a Claude Code teammate with its own context
-window, MCP access, and the ability to run commands. Context persists
-natively — the teammate simply receives the next message. The trade-off:
+window, MCP access, and the ability to run commands. For re-review, the
+lead tries to continue the same teammate; if the teammate is no longer
+active, the lead can re-spawn or conclude based on context. The trade-off:
 same model family means no cross-model diversity.
 
 Use **adversarial-review** when you want maximum review quality through
@@ -33,7 +33,7 @@ dependencies and a richer reviewer (tests, docs, web search).
 ## How it works
 
 ```
-┌──────────┐     message      ┌────────────┐
+┌──────────┐     spawn        ┌────────────┐
 │   Lead   │ ───────────────> │  Reviewer   │
 │  (code)  │                  │ (teammate)  │
 └──────────┘                  └────────────┘
@@ -45,15 +45,15 @@ dependencies and a richer reviewer (tests, docs, web search).
      v
 ┌──────────┐     message      ┌────────────┐
 │   Lead   │ ───────────────> │  Reviewer   │
-│  (fixed) │  "re-check this" │ (same ctx)  │
+│  (fixed) │  "re-check this" │ (same / new)│
 └──────────┘                  └────────────┘
                                     │
                               VERDICT: APPROVED
 ```
 
-The reviewer teammate **keeps its context** across rounds. It already
-knows the project structure, the original findings, and the discussion
-history. Re-review is cheap.
+The lead tries to continue the **same teammate** for re-review. If the
+teammate is no longer active (Agent Teams limitation), the lead can
+re-spawn with a full briefing or conclude without re-verification.
 
 ### Three modes
 
@@ -86,9 +86,14 @@ No external dependencies. No API keys beyond your Claude subscription.
 ```bash
 # Clone the repository
 git clone https://github.com/dementev-dev/claude-team-review.git
+cd claude-team-review
 
-# Symlink into Claude Code skills directory
-ln -s "$(pwd)/claude-team-review" ~/.agents/skills/claude-team-review
+# Symlink the skill
+ln -s "$(pwd)" ~/.agents/skills/claude-team-review
+
+# Symlink the reviewer agent definition
+mkdir -p ~/.claude/agents
+ln -s "$(pwd)/adversarial-reviewer.md" ~/.claude/agents/adversarial-reviewer.md
 ```
 
 Enable Agent Teams in your Claude Code settings:
@@ -101,13 +106,7 @@ Enable Agent Teams in your Claude Code settings:
 }
 ```
 
-The skill also includes a subagent definition at
-`.claude/agents/adversarial-reviewer.md`. Copy it to your project's
-`.claude/agents/` or to `~/.claude/agents/` for global availability:
-
-```bash
-cp claude-team-review/.claude/agents/adversarial-reviewer.md ~/.claude/agents/
-```
+Restart Claude Code after installation for the skill to be recognized.
 
 ## Usage
 

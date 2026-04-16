@@ -3,19 +3,19 @@ name: claude-team-review
 description: >
   Adversarial code/plan review using Claude Code Agent Teams. Spawns
   a reviewer teammate that reads the project, runs tests, checks docs,
-  and delivers findings. Lead fixes issues, teammate re-reviews — stateful,
-  no context loss between rounds. Use when user says /claude-team-review,
-  asks for team review, team-based code review, or wants a stateful
-  adversarial review without external dependencies.
+  and delivers findings. Lead fixes issues and requests re-review from
+  the same teammate. Use when user says /claude-team-review, asks for
+  team review, team-based code review, or wants an adversarial review
+  without external dependencies.
 user_invocable: true
 ---
 
 # Claude Team Review
 
 Spawns an adversarial reviewer **teammate** (Agent Teams) to review plans
-or code. The reviewer keeps its context across rounds — no re-reading the
-project on every iteration. The lead fixes issues; the reviewer re-checks.
-Maximum 5 rounds.
+or code. The lead fixes issues and requests re-review from the same
+teammate. If the teammate is no longer active, the lead decides how
+to proceed based on context. Maximum 5 rounds.
 
 > **Requires:** Claude Code ≥ 2.1.32, experimental Agent Teams enabled
 > (`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` in settings or environment).
@@ -165,13 +165,37 @@ this for the user.
 
 ### Step 5: Request re-review (Rounds 2–5)
 
-Send a message to the **same reviewer teammate** (context is preserved):
+Before sending, check that the teammate is still reachable:
+- Verify that SendMessage is available as a tool
+- If the tool is missing or the call returns an error — the teammate
+  is no longer active, skip to the fallback below
+
+After sending, check what SendMessage actually returned:
+- **Reviewer's response** (review content, findings, VERDICT) — the
+  teammate is alive. Proceed to Step 3.
+- **Routing acknowledgment only** (e.g. `{"success": true, "message":
+  "Message sent to reviewer's inbox"}` without review content) — the
+  teammate's process has ended. The message was delivered to a dead
+  inbox. Do not wait for a response — proceed to the fallback below
+  immediately.
+
+If the teammate is reachable, send a message with the list of fixes.
+
+**For plan mode with inline plans:** the reviewer already has the
+original plan in context, but a fix summary alone is not enough —
+include the full text of the current revised plan in your message
+so the reviewer verifies the actual artifact. This works in Plan Mode
+(SendMessage is communication, not file writing).
 
 ```
 I've revised based on your feedback.
 
 Here's what I changed:
 [List of fixes from Step 4]
+
+[For plan mode with inline plans only — include full revised plan text:]
+## Current revised plan
+[Full text of the revised plan]
 
 Re-review with the same adversarial stance. Focus on:
 1. Whether my fixes actually resolve the reported issues
@@ -180,11 +204,54 @@ Re-review with the same adversarial stance. Focus on:
 End with VERDICT: APPROVED or VERDICT: REVISE.
 ```
 
-The reviewer still has the full context from the previous round — it
-already knows the project structure, the plan, the original findings.
-It only needs to verify the fixes and check for new issues.
+If the reviewer responds — return to **Step 3**.
 
-Return to **Step 3**.
+**If the reviewer does not respond** (teammate is no longer active):
+
+1. **Operator available** (interactive session — you received a direct
+   human message earlier in this conversation, not just an automated
+   trigger or scheduled run; when in doubt, default to presenting
+   options) — ask:
+   ```
+   The reviewer is no longer active. Fixes have been applied:
+   [List of fixes from Step 4]
+
+   Options:
+   (a) Spawn a new reviewer to verify fixes (expensive — full project re-read)
+   (b) Conclude the review — fixes applied, verification is on you
+   ```
+   If the operator chooses (a) — spawn a new reviewer. Use the same
+   mode-appropriate briefing from **Step 2** (plan, code, or code-vs-plan),
+   and append the previous findings and fixes sections.
+
+   **For plan mode with inline plans:** include the full text of the
+   current revised plan in the briefing (same approach as Step 2 for
+   initial inline plans). The new reviewer has no prior context — it
+   must see the actual artifact, not just a fix summary.
+
+   ```
+   [Mode-appropriate briefing from Step 2; for inline plans — include
+   the full revised plan text, not the original]
+
+   This is a re-review (Round N). A previous reviewer found issues
+   that have been addressed.
+
+   ## Previous findings
+   [Verbatim findings from Round N-1]
+
+   ## Fixes applied
+   [List of fixes from Step 4]
+
+   Verify whether fixes resolve the findings. Check for new issues.
+
+   End with VERDICT: APPROVED or VERDICT: REVISE.
+   ```
+   Continue from Step 3.
+   If the operator chooses (b) — proceed to Step 6, use the
+   **"Not re-verified"** terminal state.
+
+2. **Operator not available** (headless, CI, scheduled run) — proceed
+   to Step 6, use the **"Not re-verified"** terminal state.
 
 ### Step 6: Final result
 
@@ -198,6 +265,24 @@ Return to **Step 3**.
 
 ---
 **Reviewed and approved by the reviewer teammate. Awaiting your decision.**
+```
+
+**Not re-verified** (reviewer became inactive, operator chose to conclude
+or headless mode):
+```
+## Team Review — Summary (mode: <mode>)
+
+**Status:** NOT VERIFIED — fixes applied, reviewer did not re-verify
+
+**Round N findings:**
+[Verbatim findings from the last reviewer round]
+
+**Applied fixes:**
+[List of fixes per finding]
+
+---
+**WARNING: This is NOT an approval. Fixes were applied but never verified
+by the reviewer. Manual review of the fixes is required before merging.**
 ```
 
 **Maximum rounds reached:**
@@ -215,10 +300,8 @@ Return to **Step 3**.
 
 ### Step 7: Cleanup
 
-Ask the reviewer teammate to shut down. Then clean up the team.
-
-If cleanup fails or the user declines — continue without error. Teammates
-will be cleaned up when the session ends.
+If the Agent Teams runtime provides a team cleanup mechanism, use it.
+Failures are non-blocking — teammates are cleaned up when the session ends.
 
 Do NOT delete plan files that existed before the review.
 
@@ -238,11 +321,11 @@ Do NOT delete plan files that existed before the review.
 - Avoid creating auxiliary files (memory files, state files, logs, temporary
   markdown) — prefer working within the conversation context
 - If a fix contradicts user requirements — skip and explain why
-- The reviewer teammate is stateful — use message, not re-spawn, for
-  subsequent rounds. Re-spawning wastes tokens on re-reading the project
-  tree, re-building context, and re-discovering architecture. Messaging
-  the existing teammate preserves all of that. Save tokens where it
-  doesn't cost quality — spend them where it does.
+- For re-review rounds, try to continue the existing reviewer teammate
+  first. If the teammate is no longer active, decide by context: ask the
+  operator when available, or conclude without re-verification in headless
+  mode. Re-spawning a new reviewer is expensive (full project re-read) —
+  offer it as an option, not as the default.
 - The ultimate goal is **higher quality** of plans, code, and other
   artifacts. Token economy is a means, not an end — never skip a
   verification step or cut a round short just to save tokens.
@@ -255,7 +338,7 @@ Do NOT delete plan files that existed before the review.
 |------------------------|--------------------------------|--------------------------------|
 | Reviewer model         | External (GPT via Codex CLI)   | Claude (same model family)     |
 | Cross-model blind spots| Yes — different model biases   | No — same model, different context |
-| Session persistence    | Via `codex exec resume`        | Native — teammate stays alive  |
+| Session persistence    | Via `codex exec resume`        | Try to continue teammate; graceful fallback if inactive |
 | External dependencies  | Codex CLI + OpenAI API key     | None — built into Claude Code  |
 | Reviewer capabilities  | Read-only sandbox              | Read + execute + MCP + web     |
 | Context isolation       | Full (different model)         | Full (separate context window) |
