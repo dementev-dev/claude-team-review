@@ -170,13 +170,32 @@ Before sending, check that the teammate is still reachable:
 - If the tool is missing or the call returns an error — the teammate
   is no longer active, skip to the fallback below
 
-If the teammate is reachable, send a message with the list of fixes:
+After sending, check what SendMessage actually returned:
+- **Reviewer's response** (review content, findings, VERDICT) — the
+  teammate is alive. Proceed to Step 3.
+- **Routing acknowledgment only** (e.g. `{"success": true, "message":
+  "Message sent to reviewer's inbox"}` without review content) — the
+  teammate's process has ended. The message was delivered to a dead
+  inbox. Do not wait for a response — proceed to the fallback below
+  immediately.
+
+If the teammate is reachable, send a message with the list of fixes.
+
+**For plan mode with inline plans:** the reviewer already has the
+original plan in context, but a fix summary alone is not enough —
+include the full text of the current revised plan in your message
+so the reviewer verifies the actual artifact. This works in Plan Mode
+(SendMessage is communication, not file writing).
 
 ```
 I've revised based on your feedback.
 
 Here's what I changed:
 [List of fixes from Step 4]
+
+[For plan mode with inline plans only — include full revised plan text:]
+## Current revised plan
+[Full text of the revised plan]
 
 Re-review with the same adversarial stance. Focus on:
 1. Whether my fixes actually resolve the reported issues
@@ -189,8 +208,10 @@ If the reviewer responds — return to **Step 3**.
 
 **If the reviewer does not respond** (teammate is no longer active):
 
-1. **Operator available** (interactive session — the conversation was
-   initiated by a human message, not a CI trigger or scheduled run) — ask:
+1. **Operator available** (interactive session — you received a direct
+   human message earlier in this conversation, not just an automated
+   trigger or scheduled run; when in doubt, default to presenting
+   options) — ask:
    ```
    The reviewer is no longer active. Fixes have been applied:
    [List of fixes from Step 4]
@@ -199,9 +220,18 @@ If the reviewer responds — return to **Step 3**.
    (a) Spawn a new reviewer to verify fixes (expensive — full project re-read)
    (b) Conclude the review — fixes applied, verification is on you
    ```
-   If the operator chooses (a) — spawn a new reviewer with this briefing:
+   If the operator chooses (a) — spawn a new reviewer. Use the same
+   mode-appropriate briefing from **Step 2** (plan, code, or code-vs-plan),
+   and append the previous findings and fixes sections.
+
+   **For plan mode with inline plans:** include the full text of the
+   current revised plan in the briefing (same approach as Step 2 for
+   initial inline plans). The new reviewer has no prior context — it
+   must see the actual artifact, not just a fix summary.
+
    ```
-   You are reviewing code changes in this repository.
+   [Mode-appropriate briefing from Step 2; for inline plans — include
+   the full revised plan text, not the original]
 
    This is a re-review (Round N). A previous reviewer found issues
    that have been addressed.
@@ -217,22 +247,11 @@ If the reviewer responds — return to **Step 3**.
    End with VERDICT: APPROVED or VERDICT: REVISE.
    ```
    Continue from Step 3.
-   If the operator chooses (b) — proceed to Step 6.
+   If the operator chooses (b) — proceed to Step 6, use the
+   **"Not re-verified"** terminal state.
 
 2. **Operator not available** (headless, CI, scheduled run) — proceed
-   to Step 6 with status "fixes applied, not re-verified":
-   ```
-   ## Team Review — Summary (mode: <mode>)
-
-   **Status:** Fixes applied, re-verification not completed
-   (reviewer became inactive after Round N)
-
-   **Applied fixes:**
-   [List of fixes per finding]
-
-   **Note:** First-round findings were addressed but not re-verified
-   by the reviewer. Manual review of fixes is recommended.
-   ```
+   to Step 6, use the **"Not re-verified"** terminal state.
 
 ### Step 6: Final result
 
@@ -246,6 +265,24 @@ If the reviewer responds — return to **Step 3**.
 
 ---
 **Reviewed and approved by the reviewer teammate. Awaiting your decision.**
+```
+
+**Not re-verified** (reviewer became inactive, operator chose to conclude
+or headless mode):
+```
+## Team Review — Summary (mode: <mode>)
+
+**Status:** NOT VERIFIED — fixes applied, reviewer did not re-verify
+
+**Round N findings:**
+[Verbatim findings from the last reviewer round]
+
+**Applied fixes:**
+[List of fixes per finding]
+
+---
+**WARNING: This is NOT an approval. Fixes were applied but never verified
+by the reviewer. Manual review of the fixes is required before merging.**
 ```
 
 **Maximum rounds reached:**
